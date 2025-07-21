@@ -8,7 +8,7 @@ import { LoaderCircle } from "../ui/loader";
 interface ChatInputProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onClick: () => void;
+  onSendMessage: () => void;
   disabled: boolean;
   isLoading: boolean;
 }
@@ -16,14 +16,14 @@ interface ChatInputProps {
 export function ChatInput({
   value,
   onChange,
-  onClick,
+  onSendMessage,
   disabled,
   isLoading,
 }: ChatInputProps) {
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault(); // Mencegah baris baru saat menekan Enter
-      if (!disabled) onClick();
+      if (!disabled) onSendMessage();
     }
   };
 
@@ -39,9 +39,10 @@ export function ChatInput({
         />
         <Button
           size="icon"
-          onClick={onClick}
+          onClick={onSendMessage}
           className="rounded-full flex-shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
           disabled={disabled}
+          aria-label="Summarize"
         >
           {isLoading ? (
             <LoaderCircle className="w-5 h-5" />
