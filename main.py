@@ -9,7 +9,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 from pathlib import Path
 
-# --- Memuat Konfigurasi ---
+# --- Konfigurasi (Tidak berubah) ---
 env_path = Path('.') / '.env.local'
 load_dotenv(dotenv_path=env_path)
 
@@ -19,7 +19,6 @@ if not gemini_api_key:
 genai.configure(api_key=gemini_api_key)
 
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -31,41 +30,39 @@ app.add_middleware(
 class VideoRequest(BaseModel):
     videoUrl: str
 
-# --- FUNGSI DOWNLOAD YANG SUDAH DISEMPURNAKAN ---
-def download_audio(url: str) -> tuple[str, str]:
-    """
-    Mendownload audio dalam format terbaik yang tersedia dan mengembalikan path serta nama file.
-    Tidak ada lagi konversi, tidak ada lagi tebak format!
-    """
+# --- PERBAIKAN 1: Ekstrak Info Video ---
+def get_video_info(url: str) -> dict:
+    """Mengambil metadata video dan mendownload audionya."""
     temp_dir = tempfile.gettempdir()
-    # Membuat nama file unik tapi tanpa ekstensi dulu
     temp_filename_base = os.path.join(temp_dir, f"{uuid.uuid4()}")
 
     ydl_opts = {
-        # 'bestaudio/best': Biarkan yt-dlp memilih format audio terbaik.
-        # -f ba: singkatan dari format bestaudio
         'format': 'bestaudio/best',
-        'outtmpl': f'{temp_filename_base}.%(ext)s', # Biarkan yt-dlp yang menentukan ekstensinya
+        'outtmpl': f'{temp_filename_base}.%(ext)s',
         'quiet': True,
-        'noplaylist': True, # Pastikan hanya download satu video
+        'noplaylist': True,
     }
 
-    downloaded_file_path = ""
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        # yt-dlp akan otomatis menambahkan ekstensi (.m4a, .webm, dll)
         downloaded_file_path = f"{temp_filename_base}.{info['ext']}"
 
     if not os.path.exists(downloaded_file_path):
         raise FileNotFoundError("Downloaded audio file not found.")
 
-    return downloaded_file_path, info['ext'] # Kembalikan path dan ekstensinya
+    # Kumpulkan semua data yang kita butuhkan
+    video_info = {
+        "audio_path": downloaded_file_path,
+        "extension": info.get('ext'),
+        "title": info.get('title'),
+        "thumbnail": info.get('thumbnail'),
+        "channel": info.get('channel')
+    }
+    return video_info
 
 def summarize_audio_with_gemini(audio_path: str, extension: str) -> str:
-    """Mengirim file audio langsung ke Gemini dengan tipe mime yang benar."""
+    # ... (Fungsi ini tidak ada perubahan)
     model = genai.GenerativeModel('gemini-1.5-flash-latest')
-    
-    # Menentukan Mime Type berdasarkan ekstensi file
     mime_type = f"audio/{extension}"
     
     print(f"Uploading {audio_path} with mime_type: {mime_type}...")
@@ -82,14 +79,23 @@ def summarize_audio_with_gemini(audio_path: str, extension: str) -> str:
 async def create_summary(request: VideoRequest):
     audio_path = None
     try:
-        print(f"Mulai: Mengunduh audio dari {request.videoUrl}")
-        audio_path, extension = download_audio(request.videoUrl)
+        # --- PERBAIKAN 2: Gunakan fungsi baru dan ambil semua info ---
+        print(f"Mulai: Mengambil info dan audio dari {request.videoUrl}")
+        video_info = get_video_info(request.videoUrl)
+        audio_path = video_info["audio_path"]
         
-        print(f"Audio diunduh sebagai .{extension}. Memproses dengan Gemini Flash...")
-        summary = summarize_audio_with_gemini(audio_path, extension)
+        print(f"Audio diunduh. Memproses dengan Gemini Flash...")
+        summary = summarize_audio_with_gemini(audio_path, video_info["extension"])
 
         print("Ringkasan berhasil dibuat!")
-        return {"summary": summary}
+        
+        # --- PERBAIKAN 3: Kirim semua data ke frontend ---
+        return {
+            "summary": summary,
+            "title": video_info["title"],
+            "thumbnail": video_info["thumbnail"],
+            "channel": video_info["channel"]
+        }
         
     except Exception as e:
         print(f"Terjadi error: {e}")

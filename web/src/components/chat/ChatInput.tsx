@@ -36,6 +36,7 @@ export function ChatInput({
           placeholder="Enter Youtube Url ..."
           className="w-full text-base bg-transparent border-none shadow-none p-3 focus-visible:ring-0 focus-visible:ring-offset-0"
           onKeyDown={handleKeyPress}
+          disabled={isLoading}
         />
         <Button
           size="icon"
